@@ -1,0 +1,283 @@
+`На HQ-SRV добавить 2 HardDisks+ISO`
+`На BR-SRV добавить ISO`
+
+`**HQ-SRV (samba)**`
+`vim /etc/dnsmasq.conf` 
+	`server=/au-team.irpo/192.168.3.10`
+`systemctl restart dnsmasq`
+`apt-get update && apt-get install nfs-server chrony lamp-server` 
+
+`**BR-SRV (samba)**`
+`apt-get update && apt-get install task-samba-dc ansible chrony docker-compose-v2 docker-engine -y`
+`rm -rf /etc/samba/smb.conf`
+`vim /etc/resolv.conf`
+	`nameserver 192.168.1.10`
+`vim /etc/hosts`
+	`192.168.3.10      br-srv.au-team.irpo`
+`samba-tool domain provision`
+`mv -f /var/lib/samba/private/krb5.conf /etc/krb5.conf`
+`systemctl enable --now samba`
+`samba-tool group add hq`
+`for i in {1..5}; do`
+	`samba-tool user add hquser$i P@ssw0rd;`
+	`samba-tool user setexpiry hquser$i --noexpiry;`
+	`samba-tool group addmembers hq hquser$i;`
+	`done`
+`apt-repo add rpm http://altrepo.ru/local-p10 noarch local-p10`
+`apt-get update && apt-get install sudo-samba-schema` 
+`(vim /etc/apt/sources.list)`
+`**HQ-CLI (samba)**`
+`apt-get update && apt-get install admc yandex-browser chrony sudo libsss_sudo nfs-server -y`
+`ADD:`
+	`AU-TEAM.IRPO`
+	`AU-TEAM`
+	`hq-cli`
+
+`**BR-SRV**`
+`sudo-schema-apply`
+	`yes`
+	`Administrator`
+`create-sudo-rule`
+	`prava_hq`
+	`ALL`
+	`/bin/cat`
+	`%hq`
+`**HQ-CLI**`
+`kinit administrator`
+`P@ssw0rd`
+`admc`
+	`Preferencec -> Advanced Features`
+	`au-team.irpo -> sudoers -> Attributes -> sudoOption -> Add -> !authenticate`
+	`au-team.irpo -> sudoers -> prava -> Attributes -> sudoCommand -> Add -> /bin/grep и /usr/bin/id`
+`control sudo public`
+`vim /etc/sssd/sssd.conf`
+	`services = nss, pam, sudo`
+	`sudo_provider = ad`
+`vim /etc/nsswitch.conf`
+	`sudoers: files sss`
+`systemctl reboot` 
+`rm -rf /var/lib/sss/db/*`
+`systemctl restart sssd`
+`ctrl+alt+f2`
+`root`
+`toor`
+`sudo -l -U user1.hq`
+`reboot`
+`user1.hq (P@ssw0rd)`
+`sudo cat etc/passwd | sudo grep root && sudo id root`
+
+`**HQ-SRV**`
+`lsblk`
+`mdadm --cre /dev/md0 --level=0 --raid-devices=2 /dev/sd[b-c]`
+`mdadm --detail -scan --verbose > /etc/mdadm.conf`
+`fdisck /dev/md0`
+`N->Enterx4->W`
+`mkfs.ext4 /dev/md0p1`
+`vim /etc/fstab`
+	`/dev/md0p1 /raid ext4 defaults 0 0`
+`mkdir /raid`
+`mount -a`
+`mkdir /raid/nfs`
+`chown 99:99 /raid/nfs`
+`chmod 777 /raid/nfs`
+`vim /etc/exports`
+	`/raid/nfs 192.168.2.0/28(rw,sync,no_subtree_check)`
+`exportfs -a`
+`exportfs -v`
+`systemctl enable nfs`
+`systemctl restart nfs`
+`mount -o loop /dev/sr0`
+`mount /dev/sr0 /mnt`
+`cd /mnt/web`
+`cp index.php /var/www/html`
+`cp logo.png /var/www/html`
+`vim /var/www/html/index.php`
+	`$username = "webc";`
+	`$password = "P@ssw0rd";`
+	`$dbname = "webdb";`
+`systemctl enable --now mariadb`
+`mariadb -u root -pP@ssw0rd`
+	`CREATE DATABASE webdb;`
+	`CREATE USER 'webc'@'localhost' IDENTIFIED BY 'P@ssw0rd';`
+	`GRANT ALL PRIVILEGES ON webdb. * TO 'webc'@'localhost' WITH GRANT OPTION;`
+	`EXIT;`
+`mariadb -u webc -p -D webdb < /mnt/dump.sql`
+`systemctl enable --now httpd2`
+`(test: http://192.168.1.10 in CLI)`
+`echo server 172.16.1.1 iburst prefer > /etc/chrony.conf`
+`systemctl enable --now chronyd`
+
+`**HQ-CLI**`
+`mkdir -p /mnt/nfs`
+`vim /etc/fstab`
+	`192.168.1.10:/raid/nfs /mnt/nfs nfs intr,soft,_netdev,x-systemd.automount 0.0`
+`mount -a`
+`mount -v` 
+`touch /mnt/nfs/test`
+`(Проверяется с помощью ls /mnt/nfs на hq-srv)`
+
+`**ISP (NTP)**`
+`apt-get update && apt-get install chrony nginx apache2-htpasswd -y`
+`vim /etc/chrony.conf`
+	`server 127.0.0.1 iburst prefer`
+	`hwtimestamp *`
+	`local stratum 5`
+	`allow 0/0`
+`systemctl enable --now chronyd`
+`systemctl restart chronyd`
+`chronyc sources`
+`chronyc tracking | grep Stratum`
+`vim /etc/nginx/sites-available.d/proxy.conf`
+```
+server {
+        listen 80;
+        server_name docker.au-team.irpo;
+        location / {
+                proxy_pass http://172.16.2.5:8080;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+        }
+}
+server {
+        listen 80;
+        server_name web.au-team.irpo;
+        location / {
+                proxy_pass http://172.16.2.5:8080;
+                proxy_set_header Hosr $host;
+                proxy_set_header X-Real-IP $remote_addr;
+        }
+}
+```
+`cd /etc/nginx`
+`ln -s sites-available.d/proxy.conf sites-enabled.d/`
+`mv sites-available.d/default.conf /root/`
+`systemctl enable --now nginx`
+`htpasswd -bc /etc/nginx/.htpasswd WEB P@ssw0rd`
+`vim sites-available.d/proxy.conf`
+```
+server {
+        listen 80;
+        server_name docker.au-team.irpo;
+        location / {
+                proxy_pass http://172.16.2.5:8080;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+        }
+}
+server {
+        listen 80;
+        server_name web.au-team.irpo;
+        auth_basic "Restricted Access";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        location / {
+                proxy_pass http://172.16.2.5:8080;
+                proxy_set_header Hosr $host;
+                proxy_set_header X-Real-IP $remote_addr;
+        }
+}
+```
+`systemctl restart nginx`
+`**BR-SRV**`
+`cd /etc/ansible`
+`vim hosts`
+	`VMs:`
+		`hosts:`
+			`HQ-SRV:`
+				`ansible_host: 192.168.1.10`
+				`ansible_user: remote_user`
+				`ansible_port: 2026`
+			`HQ-CLI:`
+				`ansible_host: 192.168.2.10`
+				`ansible_user: remote_user`
+				`ansible_port: 2026`
+			`HQ-RTR:`
+				`ansible_host: 192.168.1.1`
+				`ansible_user: net_admin`
+				`ansible_password: P@ssw0rd`
+				`ansible_connection: network_cli`
+				`ansible_network_os: ios`
+			`BR-RTR:`
+				`ansible_host: 192.168.2.1`
+				`ansible_user: net_admin`
+				`ansible_password: P@ssw0rd`
+				`ansible_connection: network_cli`
+				`ansible_network_os: ios`
+`vim ansible.cfg`
+	`[defaults]`
+	`ansible_python_interpreter=/usr/bin/python3`
+	`interpreter_python=auto_silent`
+	`ansible_host_key_checking: false`
+`ssh-keygen -t rsa`
+`ssh-copy-id -p 2026 remote_user@192.168.1.10`
+`ssh-copy-id -p 20926 remote_user@192.168.2.10`
+`ansible all -m ping`
+`systemctl enable --now docker`
+`mount /dev/sr0/mnt`
+`docker load < /mnt/docker/site_latest.tar`
+`docker load < /mnt/docker/mariadb_latest.tar`
+`docker images`
+`vim /root/site.yml`
+	`services:`
+		`db:`
+			`image: mariadb:10.11`
+			`container_name: db`
+			`restart: always`
+			`ports:`
+				`- "3306:3306"`
+			`environment:`
+				`MARIADB_DATABASE: "testdb"`
+				`MARIADB_USER: 'testc'`
+				`MARIADB_PASSWORD: "P@ssw0rd"`
+				`MARIADB_ROOT_PASSWORD: "toor"`
+			`testapp:`
+				`image: site`
+				`container_name: testapp`
+				`restart: always`
+				`ports:`
+					`- "8080:8080"`
+				`environment:`
+					`DB_TYPE: "maria"`
+					`DB_HOST: db`
+					`DB_NAME: "testdb"`
+					`DB_USER: "testc"`
+					`DB_PASS: "P@ssw0rd"`
+					`DB_PORT: "3306"`
+				`depends_on:`
+					`- db`
+	`![[Pasted image 20251202172026.png]]`
+`echo server 172.16.2.1 iburst prefer > /etc/chrony.conf`
+`systemctl enable --now chronyd`
+`systemctl restart chronyd`
+`chronyc sources`
+`timedatectl`
+
+`**HQ-RTR**`
+`en`
+	`conf`
+		`ntp server 172.16.1.1`
+		`ntp time utc+5`
+		`end`
+	`show ntp status`
+	`wr`
+	`conf`
+		`ip nat source static tcp 192.168.1.10 80 172.16.1.4 8080`
+		`ip nat source static tcp 192.168.1.10 2026 172.16.1.4 2026`
+		`end`
+	`wr`
+`**BR-RTR**`
+`en`
+	`conf`
+		`ntp server 172.16.2.1`
+		`ntp time utc+5`
+		`end`
+	`show ntp status`
+	`wr`
+	`conf`
+		`ip nat source static tcp 192.168.3.10 80 172.16.1.5 8080`
+		`ip nat source static tcp 192.168.3.10 2026 172.16.2.5 2026`
+		`end`
+	`wr`
+
+
+
+
