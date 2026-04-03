@@ -1,22 +1,22 @@
-`**ISP (NTP)**`
-`apt-get update && apt-get install chrony nginx apache2-htpasswd -y`
-`vim /etc/chrony.conf`
-	`server 127.0.0.1 iburst prefer`
-	`hwtimestamp *`
-	`local stratum 5`
-	`allow 0/0`
-`systemctl enable --now chronyd`
-`systemctl restart chronyd`
-`chronyc sources`
-`chronyc tracking | grep Stratum`
-`vim /etc/nginx/sites-available.d/proxy.conf`
+ISP (NTP)
+apt-get update && apt-get install chrony nginx apache2-htpasswd -y
+vim /etc/chrony.conf
+	server 127.0.0.1 iburst prefer
+	hwtimestamp *
+	local stratum 5
+	allow 0/0
+systemctl enable --now chronyd
+systemctl restart chronyd
+chronyc sources
+chronyc tracking | grep Stratum
+vim /etc/nginx/sites-available.d/proxy.conf
 --Копируем файл, который называется proxy.conf, либо переписываем его--
-`cd /etc/nginx`
-`ln -s sites-available.d/proxy.conf sites-enabled.d/`
-`mv sites-available.d/default.conf /root/`
-`systemctl enable --now nginx`
-`htpasswd -bc /etc/nginx/.htpasswd WEB P@ssw0rd`
-`vim sites-available.d/proxy.conf`
+cd /etc/nginx
+ln -s sites-available.d/proxy.conf sites-enabled.d/
+mv sites-available.d/default.conf /root/
+systemctl enable --now nginx
+htpasswd -bc /etc/nginx/.htpasswd WEB P@ssw0rd
+vim sites-available.d/proxy.conf
 --Копируем файл, который называет proxy.conf1, либо переписываем его--
-`systemctl restart nginx`
+systemctl restart nginx
 
