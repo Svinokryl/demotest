@@ -1,0 +1,70 @@
+`На HQ-SRV добавить 2 HardDisks+ISO`
+`На BR-SRV добавить ISO`
+--- памятка, maybe, не работает ---
+
+HQ-SRV (samba)
+vim /etc/dnsmasq.conf
+	server=/au-team.irpo/192.168.3.10
+systemctl restart dnsmasq
+apt-get update && apt-get install nfs-server chrony lamp-server
+
+BR-SRV (samba)
+apt-get update && apt-get install task-samba-dc ansible chrony docker-compose-v2 docker-engine -y
+rm -rf /etc/samba/smb.conf
+vim /etc/resolv.conf
+	nameserver 192.168.1.10
+vim /etc/hosts
+	192.168.3.10      br-srv.au-team.irpo
+samba-tool domain provision
+mv -f /var/lib/samba/private/krb5.conf /etc/krb5.conf
+systemctl enable --now samba
+samba-tool group add hq
+for i in {1..5}; do
+	samba-tool user add hquser$i P@ssw0rd;`
+	samba-tool user setexpiry hquser$i --noexpiry;
+	samba-tool group addmembers hq hquser$i;
+	done
+apt-repo add rpm http://altrepo.ru/local-p10 noarch local-p10
+apt-get update && apt-get install sudo-samba-schema 
+(vim /etc/apt/sources.list)
+
+HQ-CLI (samba)
+apt-get update && apt-get install admc yandex-browser chrony sudo libsss_sudo nfs-server -y
+ADD:
+	AU-TEAM.IRPO
+	AU-TEAM
+	hq-cli
+
+BR-SRV
+sudo-schema-apply
+	yes
+	Administrator
+create-sudo-rule
+	prava_hq
+	ALL
+	/bin/cat
+  %hq
+
+HQ-CLI
+kinit administrator
+P@ssw0rd
+admc
+	Preferencec -> Advanced Features
+	au-team.irpo -> sudoers -> Attributes -> sudoOption -> Add -> !authenticate
+	au-team.irpo -> sudoers -> prava -> Attributes -> sudoCommand -> Add -> /bin/grep и /usr/bin/id
+control sudo public
+vim /etc/sssd/sssd.conf
+	services = nss, pam, sudo
+	sudo_provider = ad
+vim /etc/nsswitch.conf
+	sudoers: files sss
+systemctl reboot
+rm -rf /var/lib/sss/db/
+systemctl restart sssd
+ctrl+alt+f2
+root
+toor
+sudo -l -U user1.hq
+reboot
+user1.hq (P@ssw0rd)
+sudo cat etc/passwd | sudo grep root && sudo id root
