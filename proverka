@@ -1,0 +1,12 @@
+1) ansible all -m ping 
+2)timedatectl+chronyc clients
+
+3) hq-cli: touch mnt/nfs -> hq-srv: lsblk+ls /raid/nfs
+4)samba-tool user-list | grep user (br-srv) +samba-tool group listmembers hq
+5) hq-cli: под hquser1: sudo cat /etc/passwd | sudo grep root && sudo id root + id+ klist
+
+6) http://172.16.2.1
+http://docker.au-team.irpo
+http://web.au-team.irpo
+
+7) http://web.au-team.irpo+http://192.168.3.10:8080
