@@ -33,7 +33,7 @@ ssh-copy-id -p 2026 remote_user@192.168.1.10
 ssh-copy-id -p 20926 remote_user@192.168.2.10
 ansible all -m ping
 systemctl enable --now docker
-mount /dev/sr0/mnt
+mount -o loop /dev/sr0/mnt
 docker load < /mnt/docker/site_latest.tar
 docker load < /mnt/docker/mariadb_latest.tar
 docker images
